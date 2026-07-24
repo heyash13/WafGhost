@@ -1,11 +1,6 @@
-```text
- _    _            ___  _               _   
-| |  | |          / __|| |             | |  
-| |  | | __ _  _  | |  | |__   ___  ___| |_ 
-| |/\| |/ _` || | | |  | '_ \ / _ \/ __| __|
-\  /\  / (_| || | | |__| | | | (_) \__ \ |_ 
- \/  \/ \__,_||_| \___/|_| |_|\___/|___/\__|
-```
+# WafGhost
+> **Stateful LLM-Driven WAF Evasion Fuzzer**
+> High-performance black-box testing, token mapping, and generative syntax adaptation.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Version-0.1.0-blueviolet?style=flat-square" alt="Version">
