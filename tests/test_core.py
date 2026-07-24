@@ -1,8 +1,8 @@
 from unittest.mock import MagicMock, patch
-from waf_bypasser.core import WafBypasser
-from waf_bypasser.client import WafClient
+from wafghost.core import WafBypasser
+from wafghost.client import WafClient
 
-@patch('waf_bypasser.core.WafClient')
+@patch('wafghost.core.WafClient')
 def test_waf_bypasser_heuristic_success(mock_client_class):
     # Setup mock client instance
     mock_client = MagicMock(spec=WafClient)

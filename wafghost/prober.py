@@ -3,7 +3,7 @@ from typing import Dict, List, Set, Optional, Any
 from .client import WafClient
 
 # Configure logger
-logger = logging.getLogger("waf_bypasser.prober")
+logger = logging.getLogger("wafghost.prober")
 
 class BlockMap:
     """

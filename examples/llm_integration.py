@@ -1,11 +1,11 @@
 """
-Example showing WAF-Bypasser integrated with the Gemini LLM provider.
+Example showing WafGhost integrated with the Gemini LLM provider.
 """
 
 import os
 import logging
 import sys
-from waf_bypasser import WafBypasser
+from wafghost import WafBypasser
 
 # Set up logging to stdout
 logging.basicConfig(
@@ -24,7 +24,7 @@ def run_llm_example():
     target_url = "http://localhost:5000/ssrf-endpoint"
     base_payload = "http://127.0.0.1/admin"
 
-    print("Initializing WAF-Bypasser with Gemini feedback loop...")
+    print("Initializing WafGhost with Gemini feedback loop...")
     bypasser = WafBypasser(
         target_url=target_url,
         base_payload=base_payload,

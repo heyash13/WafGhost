@@ -12,10 +12,10 @@ from .mutators.ssrf import SsrfMutator
 
 # Setup basic logging to stderr so it doesn't pollute stdout (MCP uses stdin/stdout for communications)
 logging.basicConfig(level=logging.ERROR)
-logger = logging.getLogger("waf_bypasser.mcp_server")
+logger = logging.getLogger("wafghost.mcp_server")
 
 # Create a FastMCP server
-mcp = FastMCP("WAF-Bypasser")
+mcp = FastMCP("WafGhost")
 
 @mcp.tool()
 def probe_waf(

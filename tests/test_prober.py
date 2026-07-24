@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
-from waf_bypasser.client import WafClient
-from waf_bypasser.prober import WafProber
+from wafghost.client import WafClient
+from wafghost.prober import WafProber
 
 def test_waf_prober():
     # Mock WafClient

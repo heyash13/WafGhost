@@ -1,7 +1,7 @@
-from waf_bypasser.prober import BlockMap
-from waf_bypasser.mutators.encoder import EncoderMutator
-from waf_bypasser.mutators.sql import SqlMutator
-from waf_bypasser.mutators.ssrf import SsrfMutator
+from wafghost.prober import BlockMap
+from wafghost.mutators.encoder import EncoderMutator
+from wafghost.mutators.sql import SqlMutator
+from wafghost.mutators.ssrf import SsrfMutator
 
 def test_encoder_mutator():
     bm = BlockMap()

@@ -1,11 +1,11 @@
 """
-Example showing basic library usage of WAF-Bypasser to probe a target
+Example showing basic library usage of WafGhost to probe a target
 and attempt heuristic bypass mutations.
 """
 
 import logging
 import sys
-from waf_bypasser import WafBypasser
+from wafghost import WafBypasser
 
 # Set up logging to stdout
 logging.basicConfig(
@@ -20,7 +20,7 @@ def run_example():
     target_url = "http://localhost:5000/search?query="
     base_payload = "1' UNION SELECT 1,2,3--"
 
-    print(f"Initializing WAF-Bypasser for {target_url}...")
+    print(f"Initializing WafGhost for {target_url}...")
     bypasser = WafBypasser(
         target_url=target_url,
         base_payload=base_payload,

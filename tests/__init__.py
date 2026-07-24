@@ -1,1 +1,1 @@
-# Test package for WAF-Bypasser
+# Test package for WafGhost

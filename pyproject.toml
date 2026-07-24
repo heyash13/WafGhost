@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "waf-bypasser"
+name = "wafghost"
 version = "0.1.0"
-description = "LLM-Driven Iterative WAF Evasion Fuzzer"
+description = "WafGhost: LLM-Driven Iterative WAF Evasion Fuzzer"
 readme = "README.md"
 authors = [
     { name = "AS Vishwakarma", email = "asvishwakarma@users.noreply.github.com" }
@@ -31,9 +31,9 @@ dev = [
 ]
 
 [project.scripts]
-waf-bypasser = "waf_bypasser.cli:main"
-mcp-waf-bypasser = "waf_bypasser.mcp_server:main"
+wafghost = "wafghost.cli:main"
+mcp-wafghost = "wafghost.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["waf_bypasser*"]
+include = ["wafghost*"]

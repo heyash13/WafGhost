@@ -14,7 +14,7 @@ from .llm import LlmClient
 from .fingerprinter import WafFingerprinter
 
 # Configure logger
-logger = logging.getLogger("waf_bypasser.core")
+logger = logging.getLogger("wafghost.core")
 
 class BypassResult(BaseModel):
     success: bool

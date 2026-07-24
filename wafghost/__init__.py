@@ -1,5 +1,5 @@
 """
-WAF-Bypasser: LLM-Driven Iterative WAF Evasion Fuzzer
+WafGhost: LLM-Driven Iterative WAF Evasion Fuzzer
 """
 
 from .client import WafClient

@@ -4,7 +4,7 @@ import logging
 from typing import Dict, List, Any, Optional
 
 # Configure logger
-logger = logging.getLogger("waf_bypasser.llm")
+logger = logging.getLogger("wafghost.llm")
 
 class LlmClient:
     """

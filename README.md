@@ -1,6 +1,6 @@
-# WAF-Bypasser: LLM-Driven Iterative Evasion Fuzzer
+# WafGhost: LLM-Driven Iterative Evasion Fuzzer
 
-`WAF-Bypasser` is a professional, modular Python library, CLI tool, and Model Context Protocol (MCP) server designed for black-box WAF testing, differential token probing, and generative syntax adaptation.
+`WafGhost` is a professional, modular Python library, CLI tool, and Model Context Protocol (MCP) server designed for black-box WAF testing, differential token probing, and generative syntax adaptation.
 
 It maps target firewall filters to identify blocked vs allowed symbols and keywords, then chains rule-based heuristic mutators and LLM-driven generative feedback loops to dynamically construct bypass candidates for SQL Injection, SSRF, XSS, and Path Traversal.
 
@@ -51,8 +51,8 @@ graph TD
 ### **Installation**
 Clone the repository and install the package locally:
 ```bash
-git clone https://github.com/your-username/waf-bypasser.git
-cd waf-bypasser
+git clone https://github.com/your-username/wafghost.git
+cd wafghost
 python3 -m venv venv
 source venv/bin/activate
 pip install -e . --index-url https://pypi.org/simple
@@ -74,13 +74,13 @@ python examples/local_waf_target.py
 #### **A. Standard Run (Heuristics & Fallback Evolutionary Fuzzing)**
 To run the CLI and fuzz the target parameter `q` indefinitely until a bypass is found:
 ```bash
-waf-bypasser --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --max-llm-iterations -1
+wafghost --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --max-llm-iterations -1
 ```
 
 #### **B. LLM-Driven Run (Generative Evasion Loop)**
 Engage Gemini (or OpenAI/Claude) to dynamically analyze target block responses and propose mutations:
 ```bash
-waf-bypasser --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --use-llm --llm-provider gemini --llm-key "YOUR_GEMINI_API_KEY"
+wafghost --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --use-llm --llm-provider gemini --llm-key "YOUR_GEMINI_API_KEY"
 ```
 
 ---
@@ -104,17 +104,17 @@ waf-bypasser --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 
 ---
 
 ## 🤖 Integration as an MCP Server
-You can register `WAF-Bypasser` as a Model Context Protocol (MCP) server so that agentic developer platforms (like Jetski, Claude Desktop, cursor) can call it directly as a tool during security analysis.
+You can register `WafGhost` as a Model Context Protocol (MCP) server so that agentic developer platforms (like Jetski, Claude Desktop, cursor) can call it directly as a tool during security analysis.
 
 Add the following config to your MCP server host configuration file (e.g. `mcp_config.json`):
 ```json
 {
   "mcpServers": {
-    "waf-bypasser": {
-      "command": "/absolute/path/to/waf-bypasser/venv/bin/python",
+    "wafghost": {
+      "command": "/absolute/path/to/wafghost/venv/bin/python",
       "args": [
         "-m",
-        "waf_bypasser.mcp_server"
+        "wafghost.mcp_server"
       ]
     }
   }
