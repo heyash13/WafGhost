@@ -132,6 +132,12 @@ def main():
         help="Enable debug logging output"
     )
     parser.add_argument(
+        "--max-llm-iterations",
+        type=int,
+        default=4,
+        help="Maximum LLM generative mutation iterations (set to -1 or 0 for unlimited loop)"
+    )
+    parser.add_argument(
         "--output",
         help="Save results JSON to this filepath"
     )
@@ -151,6 +157,7 @@ def main():
         use_llm=args.use_llm,
         llm_provider=args.llm_provider,
         llm_api_key=args.llm_key,
+        max_llm_iterations=args.max_llm_iterations,
     )
 
     # Initial status panel

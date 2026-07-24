@@ -144,7 +144,7 @@ class LocalWafHandler(BaseHTTPRequestHandler):
             """
             self.wfile.write(success_html.encode("utf-8"))
 
-def run(port=5000):
+def run(port=5050):
     server_address = ('127.0.0.1', port)
     httpd = HTTPServer(server_address, LocalWafHandler)
     print(f"Advanced OWASP-CRS WAF Target Server running on http://127.0.0.1:{port}")

@@ -155,8 +155,17 @@ class WafBypasser:
             
             last_resp = self.history[-1] if self.history else {"status_code": 403, "length": 0, "text": "Access Denied"}
 
-            for iteration in range(self.max_llm_iterations):
-                logger.info(f"LLM Loop iteration {iteration+1}/{self.max_llm_iterations}...")
+            iteration = 0
+            while True:
+                if self.max_llm_iterations > 0 and iteration >= self.max_llm_iterations:
+                    logger.info("Reached maximum configured LLM iterations limit. Stopping.")
+                    break
+                
+                if self.max_llm_iterations <= 0 and iteration > 0 and iteration % 20 == 0:
+                    logger.warning(f"Fuzzer has run {iteration} LLM iterations without a bypass. Still searching since unlimited mode is enabled...")
+
+                iter_label = f"unlimited_{iteration+1}" if self.max_llm_iterations <= 0 else f"{iteration+1}/{self.max_llm_iterations}"
+                logger.info(f"LLM Loop iteration {iter_label}...")
 
                 # Feed LLM with target blocks, last failure, and history of tested payloads to avoid duplicates
                 context_summary = last_resp.copy()
@@ -204,6 +213,7 @@ class WafBypasser:
                         )
                     
                     last_resp = attempt_log
+                iteration += 1
 
         # If everything fails
         logger.warning("Failed to bypass WAF. All candidates blocked.")
