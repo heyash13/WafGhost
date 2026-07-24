@@ -42,20 +42,18 @@ class WafClient:
         if proxy:
             self.session.proxies = {"http": proxy, "https": proxy}
 
-        # WAF detection configuration
         self.block_status_codes = block_status_codes or [403, 406, 429, 418, 501]
         self.block_keywords = block_keywords or [
             "Access Denied",
-            "WAF",
             "Web Application Firewall",
-            "Cloudflare",
-            "ModSecurity",
-            "sucuri",
-            "Incapsula",
-            "AkamaiGhost",
             "blocked by",
             "security challenge",
             "captcha",
+            "attention required",
+            "incident id",
+            "was blocked by",
+            "requested url was rejected",
+            "security check",
         ]
 
     def _sleep_if_needed(self):
@@ -176,12 +174,10 @@ class WafClient:
         if response.status_code in self.block_status_codes:
             return True
 
-        # Check headers for common WAF indicators
+        # Check headers indicating explicit block
         headers_lower = {k.lower(): v.lower() for k, v in response.headers.items()}
-        for waf_header in ["x-waf-blocked", "x-cdn", "server"]:
-            val = headers_lower.get(waf_header, "")
-            if any(k.lower() in val for k in self.block_keywords):
-                return True
+        if "x-waf-blocked" in headers_lower or "x-waf-event-id" in headers_lower:
+            return True
 
         # Body text keyword search
         body_content = response.text
