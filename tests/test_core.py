@@ -11,9 +11,9 @@ def test_waf_bypasser_heuristic_success(mock_client_class):
     def send_payload_side_effect(payload, param_name=None):
         if "'" in payload or " " in payload:
             if "/**/" in payload and "'" not in payload and " " not in payload:
-                return {"success": True, "is_blocked": False, "status_code": 200, "text": "OK", "length": 2}
-            return {"success": False, "is_blocked": True, "status_code": 403, "text": "Blocked", "length": 7}
-        return {"success": True, "is_blocked": False, "status_code": 200, "text": "OK", "length": 2}
+                return {"success": True, "is_blocked": False, "status_code": 200, "headers": {}, "text": "OK", "length": 2}
+            return {"success": False, "is_blocked": True, "status_code": 403, "headers": {}, "text": "Blocked", "length": 7}
+        return {"success": True, "is_blocked": False, "status_code": 200, "headers": {}, "text": "OK", "length": 2}
 
     mock_client.send_payload.side_effect = send_payload_side_effect
 
