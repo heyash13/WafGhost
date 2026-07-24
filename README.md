@@ -1,22 +1,31 @@
-# WafGhost: LLM-Driven Iterative Evasion Fuzzer
+# 👻 WafGhost: Stateful LLM-Driven WAF Evasion Fuzzer
 
-`WafGhost` is a professional, modular Python library, CLI tool, and Model Context Protocol (MCP) server designed for black-box WAF testing, differential token probing, and generative syntax adaptation.
+<p align="center">
+  <img src="https://img.shields.io/badge/Version-0.1.0-blueviolet?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge" alt="Python">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/badge/MCP-Supported-orange?style=for-the-badge" alt="MCP">
+</p>
 
-It maps target firewall filters to identify blocked vs allowed symbols and keywords, then chains rule-based heuristic mutators and LLM-driven generative feedback loops to dynamically construct bypass candidates for SQL Injection, SSRF, XSS, and Path Traversal.
+`WafGhost` is a professional, modular Python library, CLI fuzzer, and Model Context Protocol (MCP) server designed for black-box WAF testing, differential token probing, and generative syntax adaptation.
+
+It maps target firewall filters to identify blocked vs allowed symbols and keywords, then chains rule-based heuristic mutators and **real-time stateful LLM reasoning loops** to dynamically bypass modern Web Application Firewalls.
 
 ---
 
-## 🚀 How Powerful Is It? (Real-World Evasion Examples)
+## ⚡ Real-Time Stateful AI Reasoning
 
-### **Normalization & Decoder Mismatch Bypass**
-Against strict Paranoia Level 4 firewalls that recursively decode inputs and block quote breaking characters (`'`), spaces (` `), and comments (`/*`):
-- The tool uses **Unicode compatibility homoglyphs and escape formats** (like `\U0027` and `\U0020`).
-- If the WAF's normalizer crashes or fails closed on strict python-style 32-bit unicode parsing errors (while permissive database decoders accept it), the WAF skips filtering, allowing the payload:
-  `1\U0027\U0020unIOn\u0020selEct\u00201\u002c2\u002C3\u002d\u002D`
-  to bypass the rules and execute on the backend.
+Unlike traditional scanners that try static lists or perform simple blind fuzzing, `WafGhost` implements **multi-turn, stateful AI chat sessions** (Gemini, Claude, GPT-4):
 
-### **Rate Limiter & Anti-DDoS Evasion**
-- Includes automatic sliding-window request pacing to evade sliding-window block thresholds (Anti-DDoS triggers) commonly configured in Cloudflare or AWS WAF.
+1. **Failure Analysis**: The AI analyzes the exact response code, body lengths, and raw HTTP body returned from the WAF for the last payload.
+2. **Context-Aware Thinking**: It references the token blockmap (exactly which characters like `'`, `*`, or words like `SELECT` are filtered).
+3. **Adaptive Mutation**: The AI proposes new, highly specific evasion strategies (e.g., unicode escape anomalies, homoglyphs, or nested comment mutations) and observes the WAF's response on the next turn to adjust its strategy dynamically.
+
+> [!TIP]
+> **Permissive Normalization Bypass Example:**
+> Against a strict PL4 firewall that rejects standard comments, quotes, and space characters, the AI generated:
+> `1\U0027\U0020unIOn\u0020selEct\u00201\u002c2\u002C3\u002d\u002D`
+> This causes the WAF's normalizer to fail closed/error out on the invalid 32-bit unicode syntax `\U0027`, skipping rules, while the backend SQL parser decodes it successfully and executes the injection.
 
 ---
 
@@ -30,14 +39,17 @@ graph TD
     D --> E[Phase 1: Multi-Stage Heuristic Mutations]
     E --> F{Bypass Success?}
     F -- Yes --> G[Return Bypass Payload]
-    F -- No --> H[Phase 2: LLM Generative Loop]
-    H --> I{Bypass Success?}
-    I -- Yes --> G
-    I -- No / No Key --> J[Phase 3: Fallback Evolutionary Fuzzing]
+    F -- No --> H[Phase 2: Stateful LLM Chat Session]
+    H --> I[Analyze WAF Response & Blockmap]
+    I --> J[Propose Mutation & Reason Strategy]
     J --> K{Bypass Success?}
     K -- Yes --> G
-    K -- No --> L[Iterate Random Mutations]
-    L --> J
+    K -- No --> H
+    K -- Key Missing / Max Iterations --> L[Phase 3: Fallback Evolutionary Fuzzing]
+    L --> M{Bypass Success?}
+    M -- Yes --> G
+    M -- No --> N[Mutate Seed & Retry]
+    N --> L
 ```
 
 ---
@@ -46,12 +58,12 @@ graph TD
 
 ### **Prerequisites**
 - Python 3.10+
-- A Gemini, Claude, or OpenAI API key (optional, for LLM feedback loops)
+- A Gemini, Claude, or OpenAI API key (optional, for stateful AI loops)
 
 ### **Installation**
 Clone the repository and install the package locally:
 ```bash
-git clone https://github.com/your-username/wafghost.git
+git clone https://github.com/heyash13/wafghost.git
 cd wafghost
 python3 -m venv venv
 source venv/bin/activate
@@ -77,8 +89,8 @@ To run the CLI and fuzz the target parameter `q` indefinitely until a bypass is 
 wafghost --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --max-llm-iterations -1
 ```
 
-#### **B. LLM-Driven Run (Generative Evasion Loop)**
-Engage Gemini (or OpenAI/Claude) to dynamically analyze target block responses and propose mutations:
+#### **B. LLM-Driven Run (Stateful AI Evasion Loop)**
+Engage Gemini (or OpenAI/Claude) to dynamically analyze block responses in real-time and propose mutations:
 ```bash
 wafghost --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --use-llm --llm-provider gemini --llm-key "YOUR_GEMINI_API_KEY"
 ```
@@ -94,7 +106,7 @@ wafghost --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,
 | `--param` | String | `None` | Target parameter name in URL or POST body |
 | `--method` | Enum | `GET` | Request method (`GET` or `POST`) |
 | `--vuln-type` | Enum | `auto` | Vulnerability type (`auto`, `sql`, `ssrf`, `xss`, `generic`) |
-| `--use-llm` | Flag | `False` | Enable generative LLM feedback loop |
+| `--use-llm` | Flag | `False` | Enable stateful, real-time LLM reasoning loop |
 | `--llm-provider` | Enum | `gemini` | LLM provider to use (`gemini`, `openai`, `claude`) |
 | `--max-llm-iterations` | Integer | `4` | Max LLM iterations. Set to `-1` for unlimited testing |
 | `--proxy` | String | `None` | Proxy URL (e.g. `http://127.0.0.1:8080` for Burp Suite) |
@@ -126,6 +138,7 @@ Add the following config to your MCP server host configuration file (e.g. `mcp_c
 - **`generate_heuristic_mutations`**: Generates rule-based obfuscated payloads.
 - **`bypass_waf`**: Runs the entire multi-phase bypass pipeline.
 
+---
 
 ## ⚖️ Disclaimer
 *This tool is created for educational purposes and authorized penetration testing only. Do not use it against targets without written, prior consent.*
