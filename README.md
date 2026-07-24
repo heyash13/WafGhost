@@ -1,21 +1,42 @@
-# WafGhost: Stateful LLM-Driven WAF Evasion Fuzzer
+```text
+ _    _            ___  _               _   
+| |  | |          / __|| |             | |  
+| |  | | __ _  _  | |  | |__   ___  ___| |_ 
+| |/\| |/ _` || | | |  | '_ \ / _ \/ __| __|
+\  /\  / (_| || | | |__| | | | (_) \__ \ |_ 
+ \/  \/ \__,_||_| \___/|_| |_|\___/|___/\__|
+```
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.1.0-blueviolet?style=for-the-badge" alt="Version">
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge" alt="Python">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/badge/MCP-Supported-orange?style=for-the-badge" alt="MCP">
+  <img src="https://img.shields.io/badge/Version-0.1.0-blueviolet?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square" alt="Python">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License">
+  <img src="https://img.shields.io/badge/MCP-Supported-orange?style=flat-square" alt="MCP">
 </p>
 
-`WafGhost` is a professional, modular Python library, CLI fuzzer, and Model Context Protocol (MCP) server designed for black-box WAF testing, differential token probing, and generative syntax adaptation.
+---
+
+WafGhost is a professional, modular Python library, CLI fuzzer, and Model Context Protocol (MCP) server designed for black-box WAF testing, differential token probing, and generative syntax adaptation.
 
 It maps target firewall filters to identify blocked vs allowed symbols and keywords, then chains rule-based heuristic mutators and **real-time stateful LLM reasoning loops** to dynamically bypass modern Web Application Firewalls.
 
 ---
 
+### Key Capabilities
+
+| Feature | Description |
+| :--- | :--- |
+| **Token Probing** | Conducts differential byte-by-byte probing to compile a custom map of blocked and allowed characters. |
+| **Heuristic Pipeline** | Applies structured obfuscation strategies (SQL comments, encodings, casing, alternate syntax). |
+| **Stateful AI Reasoning** | Initiates multi-turn chat sessions with LLMs to dynamically adapt based on real-time WAF responses. |
+| **Evolutionary Fuzzer** | Implements fallback evolutionary random mutations when LLM tokens are exhausted. |
+| **MCP Integration** | Operates as a FastMCP server to allow security agents to call it as a native tool. |
+
+---
+
 ## Real-Time Stateful AI Reasoning
 
-Unlike traditional scanners that try static lists or perform simple blind fuzzing, `WafGhost` implements **multi-turn, stateful AI chat sessions** (Gemini, Claude, GPT-4):
+Unlike traditional scanners that try static lists or perform simple blind fuzzing, WafGhost implements **multi-turn, stateful AI chat sessions** (Gemini, Claude, GPT-4):
 
 1. **Failure Analysis**: The AI analyzes the exact response code, body lengths, and raw HTTP body returned from the WAF for the last payload.
 2. **Context-Aware Thinking**: It references the token blockmap (exactly which characters like `'`, `*`, or words like `SELECT` are filtered).
@@ -33,19 +54,25 @@ Unlike traditional scanners that try static lists or perform simple blind fuzzin
 
 ```mermaid
 graph TD
+    classDef default fill:#1E1E2F,stroke:#3D3D5C,stroke-width:1px,color:#D7D7EF;
+    classDef success fill:#1E3E28,stroke:#2E5E3D,stroke-width:1px,color:#39FF14;
+    classDef highlight fill:#2D1F3F,stroke:#5A3F7F,stroke-width:1px,color:#D3A3FF;
+
     A[Target URL / parameter] --> B[WAF Fingerprinting]
     B --> C[Differential Token Probing]
-    C --> D[Compile Allowed/Blocked Blockmap]
-    D --> E[Phase 1: Multi-Stage Heuristic Mutations]
+    C --> D[Compile Blockmap]
+    D --> E[Phase 1: Heuristic Mutations]
     E --> F{Bypass Success?}
-    F -- Yes --> G[Return Bypass Payload]
-    F -- No --> H[Phase 2: Stateful LLM Chat Session]
-    H --> I[Analyze WAF Response & Blockmap]
-    I --> J[Propose Mutation & Reason Strategy]
+    
+    F -- Yes --> G[Return Bypass Payload]:::success
+    F -- No --> H[Phase 2: Stateful LLM Chat]:::highlight
+    H --> I[Analyze WAF Response]:::highlight
+    I --> J[Propose Mutation]:::highlight
     J --> K{Bypass Success?}
+    
     K -- Yes --> G
     K -- No --> H
-    K -- Key Missing / Max Iterations --> L[Phase 3: Fallback Evolutionary Fuzzing]
+    K -- Fallback / Key Missing --> L[Phase 3: Evolutionary Fuzzing]
     L --> M{Bypass Success?}
     M -- Yes --> G
     M -- No --> N[Mutate Seed & Retry]
