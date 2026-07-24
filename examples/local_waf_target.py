@@ -1,18 +1,27 @@
 import re
+import time
 import urllib.parse
+import html
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# Simulates IP request tracking for WAF Rate Limiting
+rate_limit_db = {}
 
 class LocalWafHandler(BaseHTTPRequestHandler):
     """
-    An advanced mock WAF mimicking real-world OWASP ModSecurity CRS rules.
-    Performs recursive decoding, hex decoding normalization, and strict regex checks.
+    Ultra-strict Mock WAF mimicking OWASP ModSecurity CRS Paranoia Level 3 & 4.
+    Performs recursive URL & HTML entity decoding, strict regex blocks on SQL keywords,
+    blocks SQL comments, detects common system variables/functions, and applies IP rate-limiting.
     """
 
-    def recursive_url_decode(self, text: str, depth: int = 3) -> str:
-        """Decodes URL encoding recursively to defeat double/triple encoding bypasses."""
+    def recursive_decode(self, text: str, depth: int = 3) -> str:
+        """Decodes URL encoding and HTML entities recursively."""
         decoded = text
         for _ in range(depth):
+            # 1. URL Decode
             temp = urllib.parse.unquote(decoded)
+            # 2. HTML Entity Decode (e.g. &#x27; -> ')
+            temp = html.unescape(temp)
             if temp == decoded:
                 break
             decoded = temp
@@ -20,15 +29,15 @@ class LocalWafHandler(BaseHTTPRequestHandler):
 
     def normalize_payload(self, raw_payload: str) -> str:
         """
-        Normalizes the input payload:
-        1. Recursively URL decodes it.
-        2. Normalizes unicode characters.
-        3. Identifies hex strings (0x...) and converts them to raw text for content scanning.
+        Normalizes input payload:
+        1. Recursively decodes URL & HTML entities.
+        2. Identifies and replaces hex strings (0x...) with decoded text.
+        3. Normalizes unicode characters.
         """
-        # Decode URL encoding
-        payload = self.recursive_url_decode(raw_payload)
+        # Recursive decode
+        payload = self.recursive_decode(raw_payload)
 
-        # Find 0x... hex literals and decode them to plain text
+        # Hex representations (0x...) decoding
         hex_literals = re.findall(r'0x([0-9a-fA-F]+)', payload)
         for hex_str in hex_literals:
             try:
@@ -37,60 +46,81 @@ class LocalWafHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-        # Normalize unicode escape sequences (\u0027)
+        # Unicode escapes normalization
         try:
-            # Replaces things like \u0027 with their actual character
             payload = payload.encode('utf-8').decode('unicode-escape')
         except Exception:
             pass
 
         return payload
 
-    def check_owasp_crs_rules(self, payload: str) -> tuple[bool, str]:
+    def check_rate_limit(self, client_ip: str) -> bool:
         """
-        Simulates standard OWASP Core Rule Set PL1 & PL2 SQL Injection rules.
+        Simulates WAF Rate Limiting.
+        Limits clients to maximum 8 requests within a sliding 2-second window.
         """
-        # Rule 1: Detect SQL keyword combination pattern: union + select
-        # E.g. union select, union/**/select, un/**/ion/**/sel/**/ect, /*!50000union*/select
-        # Sanitized payload strip comments to see if keyword is still formed
-        stripped_comments = re.sub(r'/\*.*?\*/', '', payload)
-        # remove versioned comment markers as well
-        stripped_comments = re.sub(r'/\*\!\d{5}', '', stripped_comments)
-        
-        # Matches union ... select, union join, etc.
-        if re.search(r'(?i)\bunion\b.*?\bselect\b', stripped_comments):
-            return True, "OWASP Rule 942100: Detects basic SQL injection keywords combination (union select)"
+        now = time.time()
+        # Clean old timestamps
+        if client_ip in rate_limit_db:
+            rate_limit_db[client_ip] = [t for t in rate_limit_db[client_ip] if now - t < 2.0]
+        else:
+            rate_limit_db[client_ip] = []
 
-        # Rule 2: Classic SQLi Tautology e.g. or 1=1, or 'a'='a', or like, or regexp
-        # Matches operators like =, !=, LIKE, REGEXP
-        if re.search(r'(?i)\b(or|and)\b.*?(?:=|<|>|like|regexp)\b', stripped_comments):
-            return True, "OWASP Rule 942110: Detects SQL Injection Tautology (or 1=1)"
+        # Check threshold
+        if len(rate_limit_db[client_ip]) >= 8:
+            return True # Rate limit triggered
 
-        # Rule 3: Versioned comment injection detection (/*!50000union */)
-        if re.search(r'(?i)/\*!\d{5}', payload):
-            return True, "OWASP Rule 942200: Detects MySQL versioned comment execution syntax"
+        rate_limit_db[client_ip].append(now)
+        return False
 
-        # Rule 4: SQL string generation functions like CHAR() or CONCAT()
-        if re.search(r'(?i)\b(?:char|concat|ascii|bin|hex)\b\s*\(', stripped_comments):
-            return True, "OWASP Rule 942260: Detects SQL injection string generation functions (CHAR, CONCAT)"
-
-        # Rule 5: Detect inline comments inside keywords e.g. un/**/ion
-        # (detects comment block inside letters)
-        if re.search(r'(?i)[a-z]+/\*.*?\*/[a-z]+', payload):
-            return True, "OWASP Rule 942440: Detects comment injection inside keywords (obfuscated SQL keywords)"
-
-        # Rule 6: Check for quotation characters that trigger syntax breakout
+    def check_owasp_crs_rules_strict(self, payload: str) -> tuple[bool, str]:
+        """
+        Implements ultra-strict OWASP CRS PL3/PL4 WAF rules.
+        """
+        # Rule 1: Quotation characters breakout attempt
         if "'" in payload or '"' in payload or "`" in payload:
-            return True, "OWASP Rule 942100: Detects SQL character breakout attempt (quotes)"
+            return True, "OWASP Rule 942100: Detects SQL breakout characters (quotes)"
 
-        # Rule 7: Detect space characters combined with keywords
-        # If the input contains spaces alongside select/union/from/where
-        if re.search(r'(?i)\b(?:select|union|from|where|insert|delete|update)\b\s+', payload):
-            return True, "OWASP Rule 942100: Detects SQL keyword followed by whitespace/tabs"
+        # Rule 2: Complete block of SQL comment syntax (PL3/PL4 style)
+        # Blocks standard comments --, #, /*, */, or versioned comments /*!
+        if "--" in payload or "#" in payload or "/*" in payload or "*/" in payload:
+            return True, "OWASP Rule 942430: SQL Comment Delimiter Injection Blocked (e.g. --, #, /*, */)"
+
+        # Rule 3: Detect SQL keywords union/select (even without comments, since comments are blocked)
+        # Case-insensitive standalone keywords match
+        if re.search(r'(?i)\b(?:union|select|insert|delete|update|drop|alter|declare|exec)\b', payload):
+            return True, "OWASP Rule 942100: Strict SQL keyword block triggered"
+
+        # Rule 4: Classic SQL Injection Tautology (e.g. or 1=1, or like, and true, etc.)
+        if re.search(r'(?i)\b(or|and|xor|not)\b\s+.*?(=|<|>|like|regexp|in|between|is)\b', payload):
+            return True, "OWASP Rule 942110: Detects SQL Injection Tautology (boolean comparison)"
+
+        # Rule 5: Detect SQL system functions
+        if re.search(r'(?i)\b(?:char|concat|ascii|bin|hex|substr|substring|mid|length|len|count|sleep|benchmark|user|database|version)\b\s*\(', payload):
+            return True, "OWASP Rule 942260: SQL System Function Execution Blocked"
+
+        # Rule 6: SQL system variables / tables
+        if "@@" in payload or "information_schema" in payload.lower() or "sys.user_tables" in payload.lower():
+            return True, "OWASP Rule 942120: SQL System Schema/Variable Query Blocked"
+
+        # Rule 7: Hex characters query filter (PL4 checks for raw hex matching SQL symbols)
+        if re.search(r'(?i)(?:char|ascii|hex)\b', payload):
+            return True, "OWASP Rule 942100: Hex or Character encoding function keywords blocked"
 
         return False, ""
 
     def do_GET(self):
+        client_ip = self.client_address[0]
+
+        # 1. Rate Limiting Check
+        if self.check_rate_limit(client_ip):
+            self.send_response(429)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Retry-After", "2")
+            self.end_headers()
+            self.wfile.write(b"<h1>429 Too Many Requests</h1><p>Rate Limit Exceeded. Triggered by WAF Anti-DDoS.</p>")
+            return
+
         parsed_url = urllib.parse.urlparse(self.path)
         
         if parsed_url.path != "/search":
@@ -102,16 +132,16 @@ class LocalWafHandler(BaseHTTPRequestHandler):
         query_params = urllib.parse.parse_qs(parsed_url.query)
         raw_q = query_params.get("q", [""])[0]
 
-        # Normalize the payload to defeat simple bypass attempts
+        # Normalize the payload to defeat encoding/hex obfuscations
         normalized_q = self.normalize_payload(raw_q)
         
-        # Run WAF rule validations
-        is_blocked, rule_reason = self.check_owasp_crs_rules(normalized_q)
+        # Run ultra-strict rules
+        is_blocked, rule_reason = self.check_owasp_crs_rules_strict(normalized_q)
 
         if is_blocked:
             self.send_response(403)
             self.send_header("Content-Type", "text/html")
-            self.send_header("Server", "AdvancedWAF/2.4 (CRS/3.3)")
+            self.send_header("Server", "AdvancedWAF/2.4 (CRS/3.3-PL4)")
             self.end_headers()
             response_html = f"""
             <html>
@@ -122,7 +152,7 @@ class LocalWafHandler(BaseHTTPRequestHandler):
             <p><b>Triggered Signature:</b> <code>{rule_reason}</code></p>
             <p><b>Normalized Payload Evaluated:</b> <code>{repr(normalized_q)}</code></p>
             <hr style="border:0; border-top:1px solid #eee;" />
-            <small>Server: AdvancedWAF (CRS/3.3)</small>
+            <small>Server: AdvancedWAF (CRS/3.3-PL4)</small>
             </body>
             </html>
             """
@@ -147,7 +177,7 @@ class LocalWafHandler(BaseHTTPRequestHandler):
 def run(port=5050):
     server_address = ('127.0.0.1', port)
     httpd = HTTPServer(server_address, LocalWafHandler)
-    print(f"Advanced OWASP-CRS WAF Target Server running on http://127.0.0.1:{port}")
+    print(f"Advanced PL4 OWASP-CRS WAF Target Server running on http://127.0.0.1:{port}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
