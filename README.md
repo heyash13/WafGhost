@@ -1,4 +1,4 @@
-# 👻 WafGhost: Stateful LLM-Driven WAF Evasion Fuzzer
+# WafGhost: Stateful LLM-Driven WAF Evasion Fuzzer
 
 <p align="center">
   <img src="https://img.shields.io/badge/Version-0.1.0-blueviolet?style=for-the-badge" alt="Version">
@@ -13,7 +13,7 @@ It maps target firewall filters to identify blocked vs allowed symbols and keywo
 
 ---
 
-## ⚡ Real-Time Stateful AI Reasoning
+## Real-Time Stateful AI Reasoning
 
 Unlike traditional scanners that try static lists or perform simple blind fuzzing, `WafGhost` implements **multi-turn, stateful AI chat sessions** (Gemini, Claude, GPT-4):
 
@@ -29,7 +29,7 @@ Unlike traditional scanners that try static lists or perform simple blind fuzzin
 
 ---
 
-## 📊 Evasion Architecture & Workflow
+## Evasion Architecture & Workflow
 
 ```mermaid
 graph TD
@@ -54,7 +54,7 @@ graph TD
 
 ---
 
-## 🛠️ Installation & Setup
+## Installation & Setup
 
 ### **Prerequisites**
 - Python 3.10+
@@ -72,32 +72,23 @@ pip install -e . --index-url https://pypi.org/simple
 
 ---
 
-## 💻 Step-by-Step Usage & Local Testing
+## Step-by-Step Usage
 
-### **Step 1: Start the Local WAF Target Server**
-The repository includes an advanced mock target protected by an ultra-strict Paranoia Level 4 WAF (simulating ModSecurity CRS rules and rate-limiting).
+#### **Standard Run (Heuristics & Fallback Evolutionary Fuzzing)**
+To run the CLI and fuzz the target parameter indefinitely until a bypass is found:
 ```bash
-python examples/local_waf_target.py
-```
-*Output: `Advanced PL4 OWASP-CRS WAF Target Server running on http://127.0.0.1:5050`*
-
-### **Step 2: Execute the Evasion Fuzzer**
-
-#### **A. Standard Run (Heuristics & Fallback Evolutionary Fuzzing)**
-To run the CLI and fuzz the target parameter `q` indefinitely until a bypass is found:
-```bash
-wafghost --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --max-llm-iterations -1
+wafghost --url "http://example.com/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --max-llm-iterations -1
 ```
 
-#### **B. LLM-Driven Run (Stateful AI Evasion Loop)**
+#### **LLM-Driven Run (Stateful AI Evasion Loop)**
 Engage Gemini (or OpenAI/Claude) to dynamically analyze block responses in real-time and propose mutations:
 ```bash
-wafghost --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --use-llm --llm-provider gemini --llm-key "YOUR_GEMINI_API_KEY"
+wafghost --url "http://example.com/search?q=" --payload "1' UNION SELECT 1,2,3--" --param "q" --use-llm --llm-provider gemini --llm-key "YOUR_GEMINI_API_KEY"
 ```
 
 ---
 
-## ⚙️ Configuration Options
+## Configuration Options
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
@@ -115,7 +106,7 @@ wafghost --url "http://127.0.0.1:5050/search?q=" --payload "1' UNION SELECT 1,2,
 
 ---
 
-## 🤖 Integration as an MCP Server
+## Integration as an MCP Server
 You can register `WafGhost` as a Model Context Protocol (MCP) server so that agentic developer platforms (like Jetski, Claude Desktop, cursor) can call it directly as a tool during security analysis.
 
 Add the following config to your MCP server host configuration file (e.g. `mcp_config.json`):
@@ -140,5 +131,5 @@ Add the following config to your MCP server host configuration file (e.g. `mcp_c
 
 ---
 
-## ⚖️ Disclaimer
+## Disclaimer
 *This tool is created for educational purposes and authorized penetration testing only. Do not use it against targets without written, prior consent.*
