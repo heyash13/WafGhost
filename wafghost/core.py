@@ -138,12 +138,21 @@ class WafBypasser:
                     log=self.history
                 )
 
-        # 5. LLM Feedback Loop
+
+        # 5. Fallback to LLM generative loop if rule-based pipeline fails
         if self.use_llm and self.llm_client and self.llm_client.api_key:
-            logger.info("Heuristic mutation pipeline exhausted. Initiating LLM generative feedback loop...")
-            last_resp = self.history[-1] if self.history else {"status_code": 403, "length": 0, "text": "Access Denied"}
+            logger.info("Heuristic mutation pipeline exhausted. Initiating stateful LLM generative feedback loop...")
+            
+            # Start the stateful chat session
+            session = self.llm_client.create_evasion_session(
+                base_payload=self.base_payload,
+                block_map=block_map,
+                vuln_type=self.vuln_type
+            )
 
             iteration = 0
+            last_attempt = None
+            
             while True:
                 if self.max_llm_iterations > 0 and iteration >= self.max_llm_iterations:
                     logger.info("Reached maximum configured LLM iterations limit. Stopping.")
@@ -155,51 +164,49 @@ class WafBypasser:
                 iter_label = f"unlimited_{iteration+1}" if self.max_llm_iterations <= 0 else f"{iteration+1}/{self.max_llm_iterations}"
                 logger.info(f"LLM Loop iteration {iter_label}...")
 
-                context_summary = last_resp.copy()
-                context_summary["previously_tested_failed_payloads"] = list(self.tested_payloads)[-15:]
-                context_summary["detected_waf"] = self.detected_waf
-
-                llm_candidates = self.llm_client.generate_mutations(
-                    base_payload=self.base_payload,
-                    block_map=block_map.to_dict(),
-                    waf_response_summary=context_summary,
-                    vuln_type=self.vuln_type
+                # Ask the stateful session for the next payload candidate based on previous result
+                candidate, reasoning = self.llm_client.propose_next_candidate(
+                    session=session,
+                    last_attempt=last_attempt
                 )
 
-                if not llm_candidates:
-                    logger.warning("LLM generated no new mutations.")
+                if not candidate:
+                    logger.warning(f"LLM failed to propose a candidate. Reason: {reasoning}")
                     break
 
-                for candidate in llm_candidates:
-                    if candidate in self.tested_payloads:
-                        continue
-                    self.tested_payloads.add(candidate)
+                logger.info(f"LLM Strategy: {reasoning}")
 
-                    logger.info(f"Testing LLM-proposed payload: {repr(candidate)}")
-                    res = self.client.send_payload(candidate, param_name=self.param_name)
-                    
-                    attempt_log = {
-                        "source": f"llm_iter_{iteration+1}",
-                        "payload": candidate,
-                        "is_blocked": res["is_blocked"],
-                        "status_code": res["status_code"],
-                        "length": res["length"],
-                    }
-                    self.history.append(attempt_log)
+                if candidate in self.tested_payloads:
+                    logger.debug(f"LLM proposed a duplicate payload: {repr(candidate)}. Mutating randomly to avoid loop.")
+                    candidate = self._apply_random_mutations(candidate, block_map)
 
-                    if res["success"]:
-                        logger.info(f"Bypass SUCCESS with LLM payload: {repr(candidate)}")
-                        return BypassResult(
-                            success=True,
-                            payload=candidate,
-                            block_map=block_map.to_dict(),
-                            detected_waf=self.detected_waf,
-                            vuln_type=self.vuln_type,
-                            attempts=len(self.tested_payloads),
-                            log=self.history
-                        )
-                    
-                    last_resp = attempt_log
+                self.tested_payloads.add(candidate)
+                logger.info(f"Testing LLM-proposed payload: {repr(candidate)}")
+                res = self.client.send_payload(candidate, param_name=self.param_name)
+                
+                attempt_log = {
+                    "source": f"llm_iter_{iteration+1}",
+                    "payload": candidate,
+                    "is_blocked": res["is_blocked"],
+                    "status_code": res["status_code"],
+                    "length": res["length"],
+                    "text": res["text"]
+                }
+                self.history.append(attempt_log)
+
+                if res["success"]:
+                    logger.info(f"Bypass SUCCESS with LLM payload: {repr(candidate)}")
+                    return BypassResult(
+                        success=True,
+                        payload=candidate,
+                        block_map=block_map.to_dict(),
+                        detected_waf=self.detected_waf,
+                        vuln_type=self.vuln_type,
+                        attempts=len(self.tested_payloads),
+                        log=self.history
+                    )
+                
+                last_attempt = attempt_log
                 iteration += 1
 
         # 6. Fallback Random Fuzzing Loop (if LLM is disabled or fails to bypass)
