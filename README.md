@@ -126,33 +126,6 @@ Add the following config to your MCP server host configuration file (e.g. `mcp_c
 - **`generate_heuristic_mutations`**: Generates rule-based obfuscated payloads.
 - **`bypass_waf`**: Runs the entire multi-phase bypass pipeline.
 
----
-
-## 📁 Repository Structure
-```text
-waf-bypasser/
-├── README.md
-├── pyproject.toml
-├── requirements.txt
-├── .gitignore
-├── waf_bypasser/
-│   ├── __init__.py
-│   ├── client.py         # HTTP client with rate-limiting & block triggers
-│   ├── prober.py         # Differential token prober
-│   ├── core.py           # Core orchestrator & random fuzzing engine
-│   ├── fingerprinter.py  # WAF signature analyzer
-│   ├── llm.py            # Gemini, OpenAI, Claude Client API wrapper
-│   ├── mcp_server.py     # MCP Server tool definitions
-│   ├── cli.py            # Rich graphics CLI UI
-│   └── mutators/         # Heuristic transformation plugins
-│       ├── __init__.py
-│       ├── base.py
-│       ├── sql.py
-│       ├── ssrf.py
-│       └── encoder.py
-├── tests/                # Unit tests
-└── examples/             # Safe target simulators & setup scripts
-```
 
 ## ⚖️ Disclaimer
 *This tool is created for educational purposes and authorized penetration testing only. Do not use it against targets without written, prior consent.*
